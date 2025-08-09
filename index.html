@@ -32,9 +32,9 @@
     button{background:#1b2333; color:#cde6ff; border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:10px 12px; font-weight:700; cursor:pointer}
     button:hover{border-color:rgba(255,255,255,.2); box-shadow:0 0 0 2px rgba(114,34,255,.15)}
 
-    #canvasWrap{position:relative; height:100vh; overflow:hidden}
+    #canvasWrap{position:relative; height:100vh; overflow:hidden; z-index:1}
     canvas{display:block; width:100%; height:100%; touch-action:none}
-    #hud{position:absolute; top:10px; left:10px; font-size:12px; color:#b9c6e4; background:rgba(10,14,22,.4); padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,.08)}
+    #hud{position:absolute; top:10px; left:10px; font-size:12px; color:#b9c6e4; background:rgba(10,14,22,.4); padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,.08); z-index:2}
     #footer{font-size:11px; color:#8aa0c8; margin-top:10px;}
     .row .group{display:flex; gap:8px}
     .row .group > *{flex:1}
@@ -43,14 +43,14 @@
     .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; background:#0e1421; border:1px solid rgba(255,255,255,.08); padding:2px 6px; border-radius:6px}
 
     /* Mobile: top playfield, bottom panel. Lock screen while playing. */
-    #toggleBtn{display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:14px; z-index:50; padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    #toggleBtn{display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:14px; z-index:1002; padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,.35)}
 
     @media (max-width: 900px), (hover: none) and (pointer: coarse) {
       html,body{height:100%;}
       #wrap{grid-template-columns: 1fr; grid-template-rows: 1fr auto; height:100svh;}
       #canvasWrap{height:auto; min-height: 65svh}
       #ui{position:fixed; left:0; right:0; bottom:0; max-height:62svh; border-right:none; border-top:1px solid rgba(255,255,255,.06); border-radius:16px 16px 0 0;
-           padding:14px 14px 20px; overflow:auto; transform:translateY(100%); transition:transform .25s ease}
+           padding:14px 14px 20px; overflow:auto; transform:translateY(100%); transition:transform .25s ease; z-index:1001; touch-action:auto}
       #toggleBtn{display:inline-flex; align-items:center; gap:8px}
       body.menu-open #ui{ transform:translateY(0); }
       body.play-locked{ position:fixed; inset:0; overflow:hidden; }
@@ -238,11 +238,11 @@
       canvasEl.addEventListener(type, e=>{ if(!document.body.classList.contains('menu-open')) e.preventDefault(); }, {passive:false});
     });
 
-    window.addEventListener('pointerdown',e=>{ mouse.down=true; mouse.alt = e.button===2 || e.altKey; updateMouse(e); });
-    window.addEventListener('pointerup',()=>{ mouse.down=false; });
-    window.addEventListener('pointercancel',()=>{ mouse.down=false; });
-    window.addEventListener('pointermove',updateMouse);
-    window.addEventListener('keydown',e=>{ if(['Space'].includes(e.code)) { paused=!paused; pauseBtn.textContent = paused? 'Resume ▶':'Pause ▌▌'; } });
+    // IMPORTANT: attach pointer events to the canvas only (not window), so UI sliders work on touch
+    canvasEl.addEventListener('pointerdown', e => { if(document.body.classList.contains('menu-open')) return; mouse.down=true; mouse.alt = e.button===2 || e.altKey; try{canvasEl.setPointerCapture(e.pointerId);}catch(_){} updateMouse(e); });
+    canvasEl.addEventListener('pointermove',e=>{ if(!mouse.down || document.body.classList.contains('menu-open')) return; updateMouse(e); });
+    canvasEl.addEventListener('pointerup', e=>{ mouse.down=false; try{canvasEl.releasePointerCapture(e.pointerId);}catch(_){} });
+    window.addEventListener('pointercancel', ()=>{ mouse.down=false; });
 
     function updateMouse(e){
       const rect=canvasEl.getBoundingClientRect();
@@ -250,7 +250,7 @@
       mouse.x = ((e.clientX - rect.left)/rect.width) * (fluid.n+2);
       mouse.y = ((e.clientY - rect.top)/rect.height) * (fluid.n+2);
       mouse.alt = (e.buttons===2) || e.altKey; // suction
-      if(mouse.down && !document.body.classList.contains('menu-open')) paint(e);
+      paint(e);
     }
 
     function paint(e){
@@ -311,7 +311,6 @@
       const old = hueVel; hueVel = Math.max(360, hueVel); mouse.down=true; updateMouse(evt);
       for(let k=0;k<10;k++){ hue=(k*36)%360; paint({pointerType:'mouse'}); mouse.px=mouse.x; mouse.py=mouse.y; mouse.x+=Math.cos(k)*6; mouse.y+=Math.sin(k)*6; }
       mouse.down=false; hueVel = old;
-      // If small screen, keep controls closed initially
       if (matchMedia('(max-width: 900px)').matches) { setMenuOpen(false); }
     })();
 
@@ -324,15 +323,6 @@
       let fx=0, fy=0; if(keys.has('a')||keys.has('arrowleft')) fx+=0.7; if(keys.has('d')||keys.has('arrowright')) fx-=0.7; if(keys.has('w')||keys.has('arrowup')) fy+=0.7; if(keys.has('s')||keys.has('arrowdown')) fy-=0.7;
       if(fx||fy){ for(let i=1;i<=N;i++){ for(let j=1;j<=N;j++){ const idx=IX(i,j); u0[idx]+=fx*0.2; v0[idx]+=fy*0.2; } } }
     }, 60);
-
-    // Self-test
-    (function selfTest(){ try{
-      console.assert(!!document.getElementById('c'), '[self-test] canvas missing');
-      console.assert(typeof fluid.step==='function', '[self-test] step missing');
-      // Basic advection sanity: writing into a single cell should move mass (rough check)
-      const testF=new Fluid(8); testF.r0.fill(0); testF.r.fill(0); testF.u.fill(0); testF.v.fill(0); testF.u[this.IX?0:0];
-      console.log('[self-test] OK');
-    }catch(e){ console.warn('[self-test] failed', e);} })();
   </script>
 </body>
 </html>
