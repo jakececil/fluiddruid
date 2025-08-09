@@ -45,13 +45,7 @@
     /* Mobile: top playfield, bottom panel. Lock screen while playing. */
     #toggleBtn{display:none; position:fixed; left:50%; transform:translateX(-50%); bottom:14px; z-index:1002; padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,.35)}
 
-    @media (max-width: 900px), (hover: none) and (pointer: coarse) {
-      html,body{height:100%;}
-      #wrap{grid-template-columns: 1fr; grid-template-rows: 1fr auto; height:100svh;}
-      #canvasWrap{height:auto; min-height: 65svh}
-      #ui{position:fixed; left:0; right:0; bottom:0; max-height:62svh; border-right:none; border-top:1px solid rgba(255,255,255,.06); border-radius:16px 16px 0 0;
-           padding:14px 14px 20px; overflow:auto; transform:translateY(100%); transition:transform .25s ease; z-index:1001; touch-action:auto}
-      #toggleBtn{display:inline-flex; align-items:center; gap:8px}
+    @media (max-width: 900px), (hover: none) and (pointer: coarse) {$1body:not(.menu-open) #ui{ pointer-events:none; }
       body.menu-open #ui{ transform:translateY(0); }
       body.play-locked{ position:fixed; inset:0; overflow:hidden; }
     }
@@ -253,14 +247,14 @@
       if(document.body.classList.contains('menu-open')) return; sawPointerEvent=true;
       mouse.down=true; mouse.alt = e.button===2 || e.altKey;
       try{ canvasEl.setPointerCapture(e.pointerId); }catch(_){ }
-      updateFromClient(e.clientX, e.clientY);
+      updateFromClient(e.clientX ?? e.pageX, e.clientY ?? e.pageY);
       e.preventDefault(); // stop page gestures
       paint(e);
     }, {passive:false});
 
     canvasEl.addEventListener('pointermove', e => {
       if(!mouse.down || document.body.classList.contains('menu-open')) return;
-      updateFromClient(e.clientX, e.clientY);
+      updateFromClient(e.clientX ?? e.pageX, e.clientY ?? e.pageY);
       e.preventDefault();
       paint(e);
     }, {passive:false});
@@ -345,7 +339,7 @@
     // Intro burst + default to play-locked on mobile
     (function intro(){
       const w=canvasEl.clientWidth, h=canvasEl.clientHeight; const evt = { clientX:w*0.5, clientY:h*0.5, pointerType:'mouse' };
-      const old = hueVel; hueVel = Math.max(360, hueVel); mouse.down=true; updateMouse(evt);
+      const old = hueVel; hueVel = Math.max(360, hueVel); mouse.down=true; updateFromClient(evt.clientX, evt.clientY);
       for(let k=0;k<10;k++){ hue=(k*36)%360; paint({pointerType:'mouse'}); mouse.px=mouse.x; mouse.py=mouse.y; mouse.x+=Math.cos(k)*6; mouse.y+=Math.sin(k)*6; }
       mouse.down=false; hueVel = old;
       if (matchMedia('(max-width: 900px)').matches) { setMenuOpen(false); }
